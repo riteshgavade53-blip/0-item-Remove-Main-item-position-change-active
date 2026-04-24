@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Zomato Menu Cleaner</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background: #f5f5f5;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .card {
+      background: #fff;
+      border-radius: 12px;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.10);
+      padding: 40px 36px;
+      width: 420px;
+      max-width: 95vw;
+    }
+
+    h1 {
+      font-size: 22px;
+      font-weight: 700;
+      color: #e23744;
+      margin-bottom: 6px;
+    }
+
+    .subtitle {
+      color: #888;
+      font-size: 13px;
+      margin-bottom: 28px;
+    }
+
+    .drop-area {
+      border: 2px dashed #e23744;
+      border-radius: 10px;
+      padding: 32px 20px;
+      text-align: center;
+      cursor: pointer;
+      transition: background 0.2s;
+      margin-bottom: 20px;
+      background: #fff8f8;
+    }
+
+    .drop-area:hover, .drop-area.dragover {
+      background: #ffeaea;
+    }
+
+    .drop-area .icon {
+      font-size: 36px;
+      margin-bottom: 8px;
+    }
+
+    .drop-area p {
+      color: #555;
+      font-size: 14px;
+    }
+
+    .drop-area .file-name {
+      margin-top: 10px;
+      font-weight: 600;
+      color: #e23744;
+      font-size: 13px;
+      word-break: break-all;
+    }
+
+    #fileInput { display: none; }
+
+    .btn-row {
+      display: flex;
+      gap: 10px;
+      margin-top: 8px;
+    }
+
+    button {
+      flex: 1;
+      padding: 12px;
+      border: none;
+      border-radius: 8px;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity 0.15s, background 0.15s;
+    }
+
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .btn-primary {
+      background: #e23744;
+      color: #fff;
+    }
+
+    .btn-primary:hover:not(:disabled) { background: #c42f3b; }
+
+    .btn-secondary {
+      background: #f0f0f0;
+      color: #333;
+    }
+
+    .btn-secondary:hover:not(:disabled) { background: #ddd; }
+
+    .status {
+      margin-top: 18px;
+      padding: 14px 16px;
+      border-radius: 8px;
+      font-size: 13px;
+      display: none;
+    }
+
+    .status.success {
+      background: #eafaf1;
+      color: #1e7e34;
+      display: block;
+    }
+
+    .status.error {
+      background: #fff2f2;
+      color: #c0392b;
+      display: block;
+    }
+
+    .status.loading {
+      background: #f0f4ff;
+      color: #1a56db;
+      display: block;
+    }
+
+    .stats {
+      display: flex;
+      gap: 12px;
+      margin-top: 16px;
+    }
+
+    .stat-box {
+      flex: 1;
+      background: #f8f8f8;
+      border-radius: 8px;
+      padding: 12px;
+      text-align: center;
+    }
+
+    .stat-box .num {
+      font-size: 24px;
+      font-weight: 700;
+      color: #e23744;
+    }
+
+    .stat-box .label {
+      font-size: 11px;
+      color: #888;
+      margin-top: 2px;
+    }
+
+    .dl-buttons {
+      display: flex;
+      gap: 10px;
+      margin-top: 14px;
+    }
+
+    .dl-buttons button {
+      font-size: 13px;
+      padding: 10px;
+    }
+  </style>
+</head>
+<body>
+
+<div class="card">
+  <h1>Menu Cleaner</h1>
+  <p class="subtitle">Zomato Excel file clean karo - ek click mein</p>
+
+  <div class="drop-area" id="dropArea">
+    <div class="icon">File</div>
+    <p>File yahan drop karo ya click karo</p>
+    <div class="file-name" id="fileName"></div>
+  </div>
+  <input type="file" id="fileInput" accept=".xlsx,.xls">
+
+  <div class="btn-row">
+    <button class="btn-primary" id="convertBtn" disabled onclick="convertFile()">Convert</button>
+    <button class="btn-secondary" id="clearBtn" onclick="clearFile()">Clear</button>
+  </div>
+
+  <div class="status" id="status"></div>
+
+  <div class="stats" id="statsBox" style="display:none">
+    <div class="stat-box">
+      <div class="num" id="statDeleted">0</div>
+      <div class="label">Deleted Rows</div>
+    </div>
+    <div class="stat-box">
+      <div class="num" id="statConverted">0</div>
+      <div class="label">Converted Items</div>
+    </div>
+  </div>
+
+  <div class="dl-buttons" id="dlButtons" style="display:none">
+    <button class="btn-primary" onclick="downloadCleaned()">Cleaned Excel</button>
+    <button class="btn-secondary" onclick="downloadCSV()">Items CSV</button>
+  </div>
+</div>
+
+<script>
+  let selectedFile = null;
+
+  const dropArea = document.getElementById('dropArea');
+  const fileInput = document.getElementById('fileInput');
+  const fileNameEl = document.getElementById('fileName');
+  const convertBtn = document.getElementById('convertBtn');
+  const statusEl = document.getElementById('status');
+  const statsBox = document.getElementById('statsBox');
+  const dlButtons = document.getElementById('dlButtons');
+
+  dropArea.addEventListener('click', () => fileInput.click());
+
+  dropArea.addEventListener('dragover', e => {
+    e.preventDefault();
+    dropArea.classList.add('dragover');
+  });
+
+  dropArea.addEventListener('dragleave', () => dropArea.classList.remove('dragover'));
+
+  dropArea.addEventListener('drop', e => {
+    e.preventDefault();
+    dropArea.classList.remove('dragover');
+    const f = e.dataTransfer.files[0];
+    if (f) setFile(f);
+  });
+
+  fileInput.addEventListener('change', () => {
+    if (fileInput.files[0]) setFile(fileInput.files[0]);
+  });
+
+  function setFile(f) {
+    selectedFile = f;
+    fileNameEl.textContent = f.name;
+    convertBtn.disabled = false;
+    hideResult();
+  }
+
+  function clearFile() {
+    selectedFile = null;
+    fileInput.value = '';
+    fileNameEl.textContent = '';
+    convertBtn.disabled = true;
+    hideResult();
+  }
+
+  function hideResult() {
+    statusEl.className = 'status';
+    statsBox.style.display = 'none';
+    dlButtons.style.display = 'none';
+  }
+
+  function showStatus(msg, type) {
+    statusEl.textContent = msg;
+    statusEl.className = 'status ' + type;
+  }
+
+  async function convertFile() {
+    if (!selectedFile) return;
+
+    convertBtn.disabled = true;
+    showStatus('Processing...', 'loading');
+    statsBox.style.display = 'none';
+    dlButtons.style.display = 'none';
+
+    const fd = new FormData();
+    fd.append('file', selectedFile);
+
+    try {
+      const res = await fetch('/download', { method: 'POST', body: fd });
+      if (!res.ok) {
+        throw new Error('Download failed');
+      }
+
+      const blob = await res.blob();
+      const a = document.createElement('a');
+      const downloadUrl = URL.createObjectURL(blob);
+      a.href = downloadUrl;
+      a.download = selectedFile.name.replace('.xlsx', '_cleaned.xlsx');
+      a.click();
+      URL.revokeObjectURL(downloadUrl);
+
+      showStatus('Done! Cleaned file downloaded.', 'success');
+      dlButtons.style.display = 'flex';
+    } catch (e) {
+      showStatus('Server error: ' + e.message, 'error');
+    }
+
+    convertBtn.disabled = false;
+  }
+
+  async function downloadCleaned() {
+    if (!selectedFile) return;
+    const fd = new FormData();
+    fd.append('file', selectedFile);
+    const res = await fetch('/download', { method: 'POST', body: fd });
+    const blob = await res.blob();
+    const a = document.createElement('a');
+    const downloadUrl = URL.createObjectURL(blob);
+    a.href = downloadUrl;
+    a.download = selectedFile.name.replace('.xlsx', '_cleaned.xlsx');
+    a.click();
+    URL.revokeObjectURL(downloadUrl);
+  }
+
+  async function downloadCSV() {
+    if (!selectedFile) return;
+    const fd = new FormData();
+    fd.append('file', selectedFile);
+    const res = await fetch('/download-items-only', { method: 'POST', body: fd });
+    const blob = await res.blob();
+    const a = document.createElement('a');
+    const downloadUrl = URL.createObjectURL(blob);
+    a.href = downloadUrl;
+    a.download = 'items_only.csv';
+    a.click();
+    URL.revokeObjectURL(downloadUrl);
+  }
+</script>
+</body>
+</html>
