@@ -34,6 +34,14 @@ def clean_item_name(name):
     return name
 
 
+def safe_price(value):
+    """Return a numeric price, falling back to 0 for blanks and NaN."""
+    numeric = pd.to_numeric(value, errors='coerce')
+    if pd.isna(numeric):
+        return 0.0
+    return float(numeric)
+
+
 def get_protected_variation_rows(ws, col_map=None):
     """Rows with orange price cells and a positive variation price must stay unchanged."""
     col_map = col_map or get_ws_columns(ws)
@@ -49,10 +57,7 @@ def get_protected_variation_rows(ws, col_map=None):
             if fill and fill.fgColor and fill.fgColor.type == 'rgb'
             else '00000000'
         )
-        try:
-            price_value = float(price or 0)
-        except Exception:
-            price_value = 0
+        price_value = safe_price(price)
         if variation and price_value > 0 and fill_rgb == ORANGE_FILL:
             protected.add(row_idx - 2)
     return protected
@@ -121,6 +126,8 @@ def process_logic(df, protected_rows=None):
     protected_rows = protected_rows or set()
 
     df['Item Name'] = df['Item Name'].apply(clean_item_name)
+    if 'Price' in df.columns:
+        df['Price'] = pd.to_numeric(df['Price'], errors='coerce').fillna(0)
     if '__base_name' in df.columns:
         base_group = df['__base_name'].fillna("").astype(str).str.strip()
         df['group'] = base_group.where(base_group.ne(""), df['Item Name'])
@@ -272,10 +279,7 @@ def download():
     for r in range(2, ws.max_row + 1):
         base_name = ws.cell(r, base_name_col).value
         item_type = ws.cell(r, item_type_col).value
-        try:
-            price = float(ws.cell(r, price_col).value or 0)
-        except:
-            price = 0
+        price = safe_price(ws.cell(r, price_col).value)
         bg = get_cell_bg(ws, r, item_name_col)
         row_info.append({
             'excel_row': r,
@@ -309,15 +313,17 @@ def download():
         if not base_items or not variation_items:
             continue
 
+        colored_variations = [item for item in variation_items if item['bg'] != '00000000']
         representative_variation = sorted(
-            variation_items,
+            colored_variations or variation_items,
             key=lambda item: item['excel_row']
         )[0]
         for r in base_items:
-            if r['bg'] != RED_FILL:
+            if representative_variation['bg'] == '00000000':
                 continue
-            set_row_bg(ws, r['excel_row'], '00000000', num_cols)
-            set_cell_bg(ws, r['excel_row'], item_name_col, representative_variation['bg'])
+            if r['bg'] == representative_variation['bg']:
+                continue
+            set_row_bg(ws, r['excel_row'], representative_variation['bg'], num_cols)
             r['bg'] = representative_variation['bg']
 
         # ✅ FIX 4b: Ensure base item (item_type='item') comes FIRST in its group
@@ -435,7 +441,7 @@ def download_items_only():
     output_df['Name'] = df_items['Item Name']
     output_df['Item_Online_DisplayName'] = df_items['Online Display Name'].fillna(df_items['Item Name'])
     output_df['Variation_Name'] = df_items['Variation'].fillna("")
-    output_df['Price'] = df_items['Price']
+    output_df['Price'] = pd.to_numeric(df_items['Price'], errors='coerce').fillna(0)
     output_df['Category'] = df_items['Category']
     output_df['Category_Online_DisplayName'] = df_items['Category']
     output_df['Short_Code'] = ""
